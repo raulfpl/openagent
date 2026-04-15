@@ -718,21 +718,16 @@ async function openObsidianWorkspace({ vaultId, vaultPath, canvasPath }) {
   const vaultName = path.basename(vaultPath);
 
   if (process.platform === "win32") {
-    // On Windows, use 'start' via cmd.exe to open obsidian:// URLs.
+    // On Windows, use explorer.exe to open obsidian:// URLs via the registered
+    // protocol handler. This avoids shell metacharacter interpretation entirely.
     try {
-      runCommand("cmd.exe", [
-        "/c",
-        "start",
-        "",
+      spawnSync("explorer.exe", [
         `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(canvasPath)}`,
       ]);
       return;
     } catch {
       try {
-        runCommand("cmd.exe", [
-          "/c",
-          "start",
-          "",
+        spawnSync("explorer.exe", [
           `obsidian://open?vault=${encodeURIComponent(vaultId)}&file=${encodeURIComponent(canvasPath)}`,
         ]);
       } catch {

@@ -30,6 +30,19 @@ if (!fs.existsSync(hotReloadMarkerPath)) {
 
 console.log(`Linked Obsidian plugin files from ${sourceDir} to ${targetDir}`);
 
+function removeExistingTarget(targetPath) {
+  const stat = fs.lstatSync(targetPath, { throwIfNoEntry: false });
+  if (!stat) {
+    return;
+  }
+
+  if (stat.isDirectory() && !stat.isSymbolicLink()) {
+    throw new Error(`Refusing to replace directory with symlink: ${targetPath}`);
+  }
+
+  fs.rmSync(targetPath, { recursive: true, force: true });
+}
+
 function linkOrCopy(sourcePath, targetPath) {
   // On Windows, creating symlinks without Developer Mode or elevated privileges
   // will throw EPERM. Fall back to copying the file in that case.
@@ -42,17 +55,4 @@ function linkOrCopy(sourcePath, targetPath) {
       throw error;
     }
   }
-}
-
-function removeExistingTarget(targetPath) {
-  const stat = fs.lstatSync(targetPath, { throwIfNoEntry: false });
-  if (!stat) {
-    return;
-  }
-
-  if (stat.isDirectory() && !stat.isSymbolicLink()) {
-    throw new Error(`Refusing to replace directory with symlink: ${targetPath}`);
-  }
-
-  fs.rmSync(targetPath, { recursive: true, force: true });
 }
