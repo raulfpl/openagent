@@ -20,7 +20,7 @@ for (const fileName of linkedFiles) {
   }
 
   removeExistingTarget(targetPath);
-  fs.symlinkSync(sourcePath, targetPath);
+  linkOrCopy(sourcePath, targetPath);
 }
 
 const hotReloadMarkerPath = path.join(targetDir, ".hotreload");
@@ -29,6 +29,20 @@ if (!fs.existsSync(hotReloadMarkerPath)) {
 }
 
 console.log(`Linked Obsidian plugin files from ${sourceDir} to ${targetDir}`);
+
+function linkOrCopy(sourcePath, targetPath) {
+  // On Windows, creating symlinks without Developer Mode or elevated privileges
+  // will throw EPERM. Fall back to copying the file in that case.
+  try {
+    fs.symlinkSync(sourcePath, targetPath);
+  } catch (error) {
+    if (process.platform === "win32" && (error.code === "EPERM" || error.code === "EACCES")) {
+      fs.copyFileSync(sourcePath, targetPath);
+    } else {
+      throw error;
+    }
+  }
+}
 
 function removeExistingTarget(targetPath) {
   const stat = fs.lstatSync(targetPath, { throwIfNoEntry: false });

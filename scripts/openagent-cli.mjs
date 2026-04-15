@@ -22,8 +22,26 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
 
-const CODEX_APP_PATH = "/Applications/Codex.app";
-const OBSIDIAN_APP_PATH = "/Applications/Obsidian.app";
+// macOS app paths
+const CODEX_APP_PATH_DARWIN = "/Applications/Codex.app";
+const OBSIDIAN_APP_PATH_DARWIN = "/Applications/Obsidian.app";
+
+// Windows app paths (common install locations; may vary by user)
+const CODEX_APP_PATH_WIN32 = path.join(
+  process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"),
+  "Programs",
+  "Codex Desktop",
+  "Codex Desktop.exe",
+);
+const OBSIDIAN_APP_PATH_WIN32 = path.join(
+  process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"),
+  "Programs",
+  "Obsidian",
+  "Obsidian.exe",
+);
+
+const CODEX_APP_PATH = process.platform === "win32" ? CODEX_APP_PATH_WIN32 : CODEX_APP_PATH_DARWIN;
+const OBSIDIAN_APP_PATH = process.platform === "win32" ? OBSIDIAN_APP_PATH_WIN32 : OBSIDIAN_APP_PATH_DARWIN;
 const OPENAGENT_HOME = path.join(os.homedir(), ".openagent");
 const DAEMON_CONFIG_PATH = path.join(OPENAGENT_HOME, "daemon-config.json");
 const DAEMON_LOG_PATH = path.join(OPENAGENT_HOME, "daemon.log");
@@ -313,8 +331,8 @@ Commands:
 }
 
 function ensureSupportedPlatform() {
-  if (process.platform !== "darwin") {
-    throw new Error("OpenAgent currently supports macOS only.");
+  if (process.platform !== "darwin" && process.platform !== "win32") {
+    throw new Error(`OpenAgent setup supports macOS and Windows. Detected platform: ${process.platform}.`);
   }
 }
 
@@ -338,17 +356,42 @@ function ensureCommandAvailable(command, args, failureMessage) {
 }
 
 function ensureCodexDesktopInstalled() {
+  // Allow override via environment variable for non-standard install locations.
+  const customPath = process.env.OPENAGENT_CODEX_PATH;
+  if (customPath) {
+    if (fs.existsSync(customPath)) {
+      return;
+    }
+    throw new Error(`Codex Desktop not found at OPENAGENT_CODEX_PATH: ${customPath}`);
+  }
+
   if (fs.existsSync(CODEX_APP_PATH)) {
     return;
   }
+
+  if (process.platform === "win32") {
+    throw new Error(
+      "Codex Desktop was not found. Install it from https://codex.openai.com and re-run, or set OPENAGENT_CODEX_PATH to its executable.",
+    );
+  }
+
   throw new Error("Install Codex.app in /Applications before using OpenAgent.");
 }
 
 function reportObsidianDesktopStatus() {
-  if (fs.existsSync(OBSIDIAN_APP_PATH)) {
+  // Allow override via environment variable for non-standard install locations.
+  const customPath = process.env.OPENAGENT_OBSIDIAN_PATH;
+  const appPath = customPath || OBSIDIAN_APP_PATH;
+
+  if (fs.existsSync(appPath)) {
     return;
   }
-  console.log("Warning: Obsidian.app was not found in /Applications.");
+
+  if (process.platform === "win32") {
+    console.log("Warning: Obsidian was not found in the default installation path.");
+  } else {
+    console.log("Warning: Obsidian.app was not found in /Applications.");
+  }
   console.log("Setup can continue, but you will need Obsidian Desktop to use the plugin.");
 }
 
@@ -393,7 +436,7 @@ function writePluginDefaults(vaultPath) {
     ...existingState,
     settings: {
       ...existingState.settings,
-      daemonLaunchCommand: `cd ${shellEscape(repoRoot)} && exec pnpm dev:daemon`,
+      daemonLaunchCommand: "pnpm dev:daemon",
       daemonLaunchCwd: repoRoot,
       daemonSandboxMode: String(existingState.settings?.daemonSandboxMode || "workspace-write"),
       workspaceRoot: String(existingState.settings?.workspaceRoot || "Workspaces"),
@@ -412,11 +455,15 @@ async function ensureDaemonRunning() {
   console.log("Starting the OpenAgent daemon...");
   fs.mkdirSync(path.dirname(DAEMON_LOG_PATH), { recursive: true });
 
-  const child = spawn("/bin/zsh", ["-lc", `cd ${shellEscape(repoRoot)} && exec pnpm dev:daemon >> ${shellEscape(DAEMON_LOG_PATH)} 2>&1`], {
+  const logFd = fs.openSync(DAEMON_LOG_PATH, "a");
+  const child = spawn("pnpm", ["dev:daemon"], {
     cwd: repoRoot,
     detached: true,
-    stdio: "ignore",
+    stdio: ["ignore", logFd, logFd],
+    // On Windows, pnpm is a .cmd script and requires shell resolution.
+    shell: process.platform === "win32",
   });
+  fs.closeSync(logFd);
   child.unref();
 
   await waitForDaemon();
@@ -668,9 +715,35 @@ function buildDefaultWorkspaceCanvas(name, repoPath) {
 }
 
 async function openObsidianWorkspace({ vaultId, vaultPath, canvasPath }) {
-  const absoluteCanvasPath = path.join(vaultPath, canvasPath);
   const vaultName = path.basename(vaultPath);
 
+  if (process.platform === "win32") {
+    // On Windows, use 'start' via cmd.exe to open obsidian:// URLs.
+    try {
+      runCommand("cmd.exe", [
+        "/c",
+        "start",
+        "",
+        `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(canvasPath)}`,
+      ]);
+      return;
+    } catch {
+      try {
+        runCommand("cmd.exe", [
+          "/c",
+          "start",
+          "",
+          `obsidian://open?vault=${encodeURIComponent(vaultId)}&file=${encodeURIComponent(canvasPath)}`,
+        ]);
+      } catch {
+        // Best-effort; user can open Obsidian manually.
+      }
+    }
+    return;
+  }
+
+  // macOS: use the `open` command.
+  const absoluteCanvasPath = path.join(vaultPath, canvasPath);
   try {
     runCommand("open", ["-a", "Obsidian", absoluteCanvasPath]);
   } catch {
