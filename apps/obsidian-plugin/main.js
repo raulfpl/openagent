@@ -847,8 +847,8 @@ class OpenAgentDaemonLauncher {
         stdio: ["ignore", logFd, logFd],
       });
     }
-    fs.closeSync(logFd);
     child.unref();
+    fs.closeSync(logFd);
 
     await this.waitForReady();
   }

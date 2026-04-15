@@ -463,8 +463,8 @@ async function ensureDaemonRunning() {
     // On Windows, pnpm is a .cmd script and requires shell resolution.
     shell: process.platform === "win32",
   });
-  fs.closeSync(logFd);
   child.unref();
+  fs.closeSync(logFd);
 
   await waitForDaemon();
   console.log("OpenAgent daemon is running.");
