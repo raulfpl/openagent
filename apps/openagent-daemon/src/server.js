@@ -27,7 +27,15 @@ const {
 const OPENAGENT_HOME = path.join(os.homedir(), ".openagent");
 const CONFIG_PATH = path.join(OPENAGENT_HOME, "daemon-config.json");
 const STATE_PATH = path.join(OPENAGENT_HOME, "daemon-state.json");
-const DEFAULT_APP_PATH = "/Applications/Codex.app";
+const DEFAULT_APP_PATH =
+  process.platform === "win32"
+    ? path.join(
+        process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"),
+        "Programs",
+        "Codex Desktop",
+        "Codex Desktop.exe",
+      )
+    : "/Applications/Codex.app";
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 4317;
 

@@ -20,7 +20,7 @@ Pick nodes on a canvas, turn them into a task, keep nearby context visible, and 
 
 Requirements:
 
-- macOS
+- macOS or Windows 10/11
 - Node.js 20+
 - `pnpm`
 - Codex Desktop

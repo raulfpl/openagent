@@ -3,13 +3,20 @@ import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 
-export const OBSIDIAN_CONFIG_PATH = path.join(
-  os.homedir(),
-  "Library",
-  "Application Support",
-  "obsidian",
-  "obsidian.json",
-);
+function resolveObsidianConfigPath() {
+  if (process.platform === "win32") {
+    const appData = process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming");
+    return path.join(appData, "obsidian", "obsidian.json");
+  }
+  if (process.platform === "darwin") {
+    return path.join(os.homedir(), "Library", "Application Support", "obsidian", "obsidian.json");
+  }
+  // Linux / other POSIX
+  const xdgConfig = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
+  return path.join(xdgConfig, "obsidian", "obsidian.json");
+}
+
+export const OBSIDIAN_CONFIG_PATH = resolveObsidianConfigPath();
 
 export function readJson(filePath, fallback = null) {
   try {

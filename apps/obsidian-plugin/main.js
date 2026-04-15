@@ -828,13 +828,27 @@ class OpenAgentDaemonLauncher {
 
     fs.mkdirSync(path.dirname(DAEMON_LOG_PATH), { recursive: true });
 
-    const shellCommand = `${launchSpec.command} >> ${shellEscape(DAEMON_LOG_PATH)} 2>&1`;
-    const child = spawn("/bin/zsh", ["-lc", shellCommand], {
-      cwd: launchSpec.cwd || os.homedir(),
-      detached: true,
-      stdio: "ignore",
-    });
+    const logFd = fs.openSync(DAEMON_LOG_PATH, "a");
+    let child;
+    if (process.platform === "win32") {
+      // On Windows, run the command through cmd.exe so that .cmd wrappers
+      // (e.g. pnpm.cmd) are resolved correctly.
+      child = spawn("cmd.exe", ["/c", launchSpec.command], {
+        cwd: launchSpec.cwd || os.homedir(),
+        detached: true,
+        stdio: ["ignore", logFd, logFd],
+      });
+    } else {
+      // On macOS / Linux, use the login shell so that PATH is fully populated.
+      const shell = process.env.SHELL || "/bin/sh";
+      child = spawn(shell, ["-lc", launchSpec.command], {
+        cwd: launchSpec.cwd || os.homedir(),
+        detached: true,
+        stdio: ["ignore", logFd, logFd],
+      });
+    }
     child.unref();
+    fs.closeSync(logFd);
 
     await this.waitForReady();
   }
@@ -856,7 +870,7 @@ class OpenAgentDaemonLauncher {
 
     return {
       cwd: repoRoot,
-      command: `cd ${shellEscape(repoRoot)} && exec pnpm dev:daemon`,
+      command: "pnpm dev:daemon",
     };
   }
 
